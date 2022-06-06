@@ -1,0 +1,692 @@
+---
+title: "mgt6203-Project-team103"
+author: "Team 103"
+date: '2022-04-26'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+## Load all required libraries
+
+```{r echo=FALSE}
+#load necessary libraries
+if (!require(dplyr)) install.packages("dplyr")
+library(dplyr)
+
+if (!require(tidyr)) install.packages("tidyr")
+library(tidyr)
+
+if (!require(stringr)) install.packages("stringr")
+library(stringr)
+
+if (!require(stats)) install.packages("stats")
+library(stats)
+
+if (!require(caret)) install.packages("caret")
+library(caret)
+
+if (!require(e1071)) install.packages("e1071")
+library(e1071)
+
+if (!require(GGally)) install.packages("GGally")
+library(GGally)
+
+if (!require(rpart)) install.packages("rpart")
+library(rpart)
+
+if (!require(readxl)) install.packages("readxl")
+library(readxl)
+
+if (!require(caTools)) install.packages("caTools")
+library(caTools)
+
+#if (!require(leaps)) install.packages("leaps")
+#library(leaps)
+
+```
+
+Clear the R environment
+
+```{r}
+rm(list = ls())
+set.seed(126)
+```
+
+# Data Preprocessing
+
+Read NBA and College data from 2011 to 2021
+
+```{r}
+nba_data <- read.csv("Dataset/nba_advanced_data_2011_2021_refined.csv", header=TRUE, sep = ",")
+
+college_data <- read.csv("Dataset/college_bball_data.csv", header=TRUE, sep = ",")
+```
+
+Select nba variables that would be good for showing overall success of the player in thier nba career
+
+```{r}
+nba_data <- nba_data[c('Year', 'Player', 'Pos', 'G', 'MP', 'PER', 'OWS', 'DWS', 'WS', 'WS.48', 'OBPM', 'DBPM', 'BPM', 'VORP')]
+```
+
+Check NBA data
+
+```{r}
+head(nba_data)
+```
+
+Check College data
+
+```{r}
+head(college_data)
+```
+
+Rename columns of both College and NBA datasets
+
+```{r}
+#rename columns with prefixes 'college_' and 'nba_' for clarity when datasets are combined
+college_data <- rename(college_data, college_Player = Player)
+college_data <- rename(college_data, college_G = G)
+college_data <- rename(college_data, college_GS = GS)
+college_data <- rename(college_data, college_MP = MP)
+college_data <- rename(college_data, college_FG = FG)
+college_data <- rename(college_data, college_FGA = FGA)
+college_data <- rename(college_data, college_FG. = FG.)
+college_data <- rename(college_data, college_2P = X2P)
+college_data <- rename(college_data, college_2PA = X2PA)
+college_data <- rename(college_data, college_2P. = X2P.)
+college_data <- rename(college_data, college_3P = X3P)
+college_data <- rename(college_data, college_3PA = X3PA)
+college_data <- rename(college_data, college_3P. = X3P.)
+college_data <- rename(college_data, college_FT = FT)
+college_data <- rename(college_data, college_FTA = FTA)
+college_data <- rename(college_data, college_FT. = FT.)
+college_data <- rename(college_data, college_ORB = ORB)
+college_data <- rename(college_data, college_DRB = DRB)
+college_data <- rename(college_data, college_TRB = TRB)
+college_data <- rename(college_data, college_AST = AST)
+college_data <- rename(college_data, college_STL = STL)
+college_data <- rename(college_data, college_BLK = BLK)
+college_data <- rename(college_data, college_TOV = TOV)
+college_data <- rename(college_data, college_PF = PF)
+college_data <- rename(college_data, college_PTS = PTS)
+college_data <- rename(college_data, college_Year = Year)
+college_data <- rename(college_data, college_Team = Team)
+
+nba_data <- rename(nba_data, nba_Year = Year)
+nba_data <- rename(nba_data, nba_Player = Player)
+nba_data <- rename(nba_data, nba_Pos = Pos)
+nba_data <- rename(nba_data, nba_G = G)
+nba_data <- rename(nba_data, nba_MP = MP)
+nba_data <- rename(nba_data, nba_PER = PER)
+nba_data <- rename(nba_data, nba_OWS = OWS)
+nba_data <- rename(nba_data, nba_DWS = DWS)
+nba_data <- rename(nba_data, nba_WS = WS)
+nba_data <- rename(nba_data, nba_WS.48 = WS.48)
+nba_data <- rename(nba_data, nba_OBPM = OBPM)
+nba_data <- rename(nba_data, nba_DBPM = DBPM)
+nba_data <- rename(nba_data, nba_BPM = BPM)
+nba_data <- rename(nba_data, nba_VORP = VORP)
+
+```
+
+Average each column by player before combining NBA and College data so as to get 1 row per player
+
+```{r}
+college_data = college_data %>% group_by(college_Player)  %>%
+                            summarise(college_G = mean(college_G),
+                                      college_GS = mean(college_GS),
+                                      college_MP = mean(college_MP),
+                                      college_FG = mean(college_FG),
+                                      college_FGA = mean(college_FGA),
+                                      college_FG. = mean(college_FG.),
+                                      college_2P = mean(college_2P),
+                                      college_2PA = mean(college_2PA),
+                                      college_2P. = mean(college_2P.),
+                                      college_3P = mean(college_3P),
+                                      college_3PA = mean(college_3PA),
+                                      college_3P. = mean(college_3P.),
+                                      college_FT = mean(college_FT),
+                                      college_FTA = mean(college_FTA),
+                                      college_FT. = mean(college_FT.),
+                                      college_ORB = mean(college_ORB),
+                                      college_DRB = mean(college_DRB),
+                                      college_TRB = mean(college_TRB),
+                                      college_AST = mean(college_AST),
+                                      college_STL = mean(college_STL),
+                                      college_BLK = mean(college_BLK),
+                                      college_TOV = mean(college_TOV),
+                                      college_PF = mean(college_PF),
+                                      college_PTS = mean(college_PTS),
+                                      college_Team = max(college_Team),
+                                      .groups = 'drop')
+
+nba_data = nba_data %>% group_by(nba_Player)  %>%
+                    summarise(nba_G = mean(nba_G),
+                              nba_MP = mean(nba_MP),
+                              nba_PER = mean(nba_PER),
+                              nba_OWS = mean(nba_OWS),
+                              nba_DWS = mean(nba_DWS),
+                              nba_WS = mean(nba_WS),
+                              nba_WS.48 = mean(nba_WS.48),
+                              nba_OBPM = mean(nba_OBPM),
+                              nba_DBPM = mean(nba_DBPM),
+                              nba_BPM = mean(nba_BPM),
+                              nba_VORP = mean(nba_VORP),
+                              .groups = 'drop')
+```
+
+Merge NBA and College datasets by player name
+
+```{r}
+#Inner join dataframes on player name
+combined_df = merge(x = college_data, y = nba_data, by.x = "college_Player", by.y = "nba_Player")
+
+head(combined_df)
+```
+
+Export merged dataset as .csv 
+
+```{r}
+write.csv(combined_df,"Dataset/nba_college_combined_dataset.csv", row.names = TRUE)
+```
+
+# Logistic Regression Model
+
+```{r}
+d <- read_excel('Dataset/final_ncaa_data.xlsx', col_names = TRUE)
+
+```
+
+Split the data into a 70% training set and 30% test set
+
+```{r}
+sampleSplit <- sample.split(Y=d$Drafted, SplitRatio=0.7) 
+trainSet <- subset(x=d, sampleSplit==TRUE) 
+testSet <- subset(x=d, sampleSplit==FALSE)
+```
+
+Create the logistic regression model that predicts if the player will be Drafted to the NBA
+
+```{r}
+
+model1 <- glm(Drafted ~ G + GS + MP + FG + FGA + FG_percent + Twos + TwosA + Twos_percent + Threes + ThreesA + 
+               Threes_percent + FT + FTA + FT_percent + ORB + DRB + TRB + AST + STL + BLK + TOV + PF + PTS, 
+             family=binomial(link='logit'), data=trainSet)
+
+# From here we can identify the statistically significant variables 
+# One thing to note, which we will discuss later, is the Coeffecients line:
+# "Coefficients: (4 not defined because of singularities)"
+# Threes, ThreesA, TRB, and PTS have coefficients of NA 
+
+summary(model1)
+```
+
+Predict using the generated model and create a Confusion Matrix
+
+```{r}
+# Use the model to predict Drafted using the testSet
+probabs1 <- predict(model1, testSet, type='response') 
+
+# Set the threshold for 0.5, if the predicted value is greater
+# than 0.5, set it to 1, if it less than 0.5, set it to 0
+preds1 <- ifelse(probabs1 > 0.5, 1, 0)
+
+# Create the confusion matrix to assess the accuracy of our model
+confusionMatrix(factor(preds1), factor(testSet$Drafted))
+# 96.1% accuracy, 111 incorrectly undrafted.
+# 111 incorrectly undrafted players could mean our threshold is too high? 
+# Maybe lowering the threshold will allow the model to correctly predict more 
+# players Draft status
+```
+
+Predict using a different threshold and subsequently create a Confusion Matrix
+
+```{r}
+# Predicting with a threshold of 0.4
+preds2 <- ifelse(probabs1 > 0.4, 1, 0)
+
+# Create the confusion matrix to see if the accuracy improved
+confusionMatrix(factor(preds2), factor(testSet$Drafted))
+# 95.7% accuracy
+# Lowering the threshold did not improve accuracy
+# Let's build a model only using the statistically significant variables 
+# to see if that improves accuracy and performance
+```
+
+Generate a new model using only the statistically significant predictors 
+
+```{r}
+# According to the summary of model1 th statistically significant variables
+# are G, GS, MP, FG, FG_percent, Twos, FT_percent, ORB, DRB, AST, STL
+# BLK, and TOV
+model2 <- glm(Drafted ~ G + GS + MP + FG + FG_percent + Twos + FT_percent + ORB + DRB + AST + STL + BLK + TOV, 
+              family=binomial(link='logit'), data=trainSet)
+
+summary(model2)
+# summary of the second model
+```
+
+Predict using the newly generated model and create a Confusion Matrix
+
+```{r}
+# Use model2 to predict Drafted using the testSet
+probabs2 <- predict(model2, testSet, type='response') 
+preds3 <- ifelse(probabs2 > 0.5, 1, 0)
+
+# Create a confusion matrix to see if model2 performs better than model1
+confusionMatrix(factor(preds3), factor(testSet$Drafted))
+# 96.32% accuracy, but still 119 incorrectly undrafted players
+# To improve accuracy and performance of this model we would probably have 
+# to use other predictors than just box score stats
+# Also, this model does not take into account if an undrafted player goes to 
+# G-league or NBA-affiliated team and then 
+# eventually starts to play for the NBA
+```
+
+Check the correlation between predictor variables
+
+```{r}
+# Let's discuss the correlation between these predictor variables,
+cor(d[, c(5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,
+          22,23,24,25,26,27,28,29)], method="pearson")
+# Threes is almost perfectly correlated with ThreesA (0.99011326)
+# which makes sense, the number of three points made has a strong linear
+# relationship with how many three point shots are attempted
+
+# TRB (total rebounds) is almost perfectly correlated with 
+# ORB (offensive rebounds) and DRB (defensive rebounds) 
+# This makes sense because TRB is the sum of ORB and DRB
+
+# PTS (points) is heavily correlated with other stats involving points like:
+# FG (field goals), 0.9915826, FGA (field goals attempted), 0.9893999, 
+# FT (free throws), FTA (free throws attempted)
+
+# Many of these box score stats are related to each other; there are
+# three stats related to Games: G (Games), GS (Games Started), and
+# MP (Minutes Played), three stats related to Field Goals, three stats related
+# to 2-pointers, three stats related to 3-pointers, three stats related to 
+# Free Throws, and three stats realted to Rebounds.
+
+# To improve our model's performance and accuracy we would like to use 
+# more variables that are not related to each other
+
+```
+
+Using both model1 and model2 to predict the players from the 2022 NCAA season who will be drafted to the NBA
+
+Read the player data for the NCAA 2022 Season
+
+```{r}
+ncaa2022data <- read_excel('Dataset/final_ncaa_data_2022.xlsx', col_names = TRUE)
+ncaa2022data <- na.omit(ncaa2022data)
+```
+Predict using model1
+
+```{r}
+# Use model1 to predict
+probabs3 <- predict(model1, ncaa2022data, type='response') 
+preds4 <- ifelse(probabs3 > 0.5, 1, 0)
+```
+
+Construct a dataframe to see which players the model predicted will be drafted by the NBA, order it by preds descending to see which players the model thinks will be drafted (1)
+
+```{r}
+df1 <- data.frame(Name = ncaa2022data$Player, Drafted = preds4)
+df1 <- df1[df1$Drafted == 1,]
+
+# The model predicts 9 players will be drafted by the NBA in 2022:
+# Chet Holmgren, Trayce Jackson-Davis, Keegan Murray, JT Shumate, 
+# Norchad Omier, Jayveous McKinnis, Johni Broome, Max Abmas, Jalen Pickett
+```
+
+Using the model to predict 10 very notable NCAA draft picks prior to 2011: (1) Steph Curry, (2) Blake Griffin, (3) Derrick Rose, 
+(4) James Harden, (5) Draymond Green, (6) Kevin Durant, (7) Chris Paul, (8) Brook Lopez, (9) Carmelo Anthony (10) Russell Westbrook
+
+```{r}
+notables <- read_excel('Dataset/notable_draftees.xlsx', col_names = TRUE)
+```
+Use model1 to predict
+
+```{r}
+# Use model1 to predict
+probabs4 <- predict(model1, notables, type='response') 
+preds5 <- ifelse(probabs4 > 0.5, 1, 0)
+df2 <- data.frame(Name = notables$Player, Drafted = preds5)
+```
+Use model2 to predict
+
+```{r}
+# Use model2 to predict
+probabs5 <- predict(model2, notables, type='response')
+preds6 <- ifelse(probabs5 > 0.5, 1, 0)
+df3 <- data.frame(Name = notables$Player, Drafted = preds6)
+```
+
+ Model1 and Model2 do not predict Derrick Rose, James Harden, Draymond Green,
+ Chris Paul, Brook Lopez, or Russell Westbrook from being drafted to the NBA
+
+ Our model only uses box score stats; there could be other factors that play
+ a role in determining whether a player gets drafted or not, for example:
+ the position that player plays or the maybe even the height of the players
+
+ The NBA teams draft order is decided by the reverse order of their regular
+ season reason record. The teams that did poorly will get to pick first,
+ giving these teams a chance to get a high draft pick to improve their 
+ team's performance for the upcoming season.
+
+ However, what should also be considered is the team's current roster. 
+ Did a veteran player just retire? Are there players planning on retiring?
+ Is the resoter healthy? Are there any players with significant injuries that
+ could affect them for future seasons? These scenarios could also influence
+ what draft picks to choose that go beyond the scope of just box score stats.
+
+# Decision Tree Regressor Models
+
+Read the combined NBA and College dataset
+
+```{r}
+#read the cleaned and merged dataset
+df <- read.csv("Dataset/nba_college_combined_dataset.csv", header = TRUE, sep = ",")
+
+#head(df)
+```
+
+Initialize attributes with null values to zero (0)
+
+```{r}
+df[is.na(df)] <- 0
+
+#check for null values in columns
+sapply(df, function(x) sum(is.na(x)))
+```
+
+Split the dataset into training(75%) and test(25%) sets
+
+```{r}
+#split of 75% of the data for training the model and 25% of the data to test the model
+smp_size <- floor(0.75 * nrow(df))
+set.seed(123)
+
+train_ind <- sample(seq_len(nrow(df)), size = smp_size)
+df_train <- df[train_ind, ]
+df_test <- df[-train_ind, ]
+```
+
+### Train the Win Shares Decision Tree Regressor Model with selected college predictors
+
+```{r}
+# All College Predictors
+# fit <- rpart(nba_WS ~ college_GS + college_MP + college_FG + college_FGA + college_FG. + 
+#                       college_2P + college_2PA + college_2P. + college_3P + college_3PA + 
+#                       college_3P. + college_FT + college_FTA + college_FT. + college_ORB + 
+#                       college_DRB + college_TRB + college_AST + college_STL + college_BLK + 
+#                       college_TOV + college_PF + college_PTS,
+#              method = "anova", data = df_train)
+
+#Variables from Mallow's CP variable selection for WinShare model
+fit <- rpart(nba_WS ~ college_FG +	college_2P +	college_3P +	college_FTA +	college_FT. +	
+               college_TRB +	college_AST +	college_STL + college_BLK +	college_PTS,
+             method = "anova", data = df_train)
+```
+
+Plot the WinShare Decision Tree Regressor Model
+
+```{r}
+# Plot
+plot(fit, uniform = TRUE, main = "NBA Win Share Decision Tree Regression")
+text(fit, use.n = TRUE, cex = .7)
+```
+
+Predict using the generated WinShare Decision Tree Regressor Model
+
+```{r}
+#Make predictions on the test dataset
+prediction <- predict(fit, df_test, method = "anova")
+
+results_df <- data.frame(df_test$nba_WS, prediction)
+#results_df
+
+results_df$difference <- round(results_df$df_test.nba_WS - results_df$prediction,2)
+
+MAE = mean(abs(results_df$difference))
+print(paste("Mean Absolute Error (MAE) is: ", round(MAE, 3)))
+
+SSE = sum(results_df$difference**2)
+print(paste("Sum of Squared Errors (SSE) is:", round(SSE, 3)))
+```
+
+### Train VORP Decision Tree Regressor Model with selected college predictors
+
+```{r}
+#All College Data
+# fit_vorp <- rpart(nba_WS ~ college_GS + college_MP + college_FG + college_FGA + college_FG. + college_2P + college_2PA + college_2P. + 
+#                            college_3P + college_3PA + college_3P. + college_FT + college_FTA + college_FT. + college_ORB + college_DRB +     #                            college_TRB + college_AST + college_STL + college_BLK + college_TOV + college_PF + college_PTS,
+#              method = "anova", data = df_train)
+
+#Variables from Mallow's CP variable selection model 1 (two models tied with cp = 9)
+# fit_vorp <- rpart(nba_VORP ~ college_FG +	college_2P +	college_3P +	college_3PA +	college_3P. +	college_FT +	college_FTA +	college_DRB +	
+#                              college_TRB +	college_AST +	college_STL +	college_BLK +	college_TOV +	college_PTS,
+#              method = "anova", data = df_train)
+
+#Variables from Mallow's CP variable selection model 2 (two models tied with cp = 9)
+fit_vorp <- rpart(nba_VORP ~ college_MP +	college_FG +	college_2P +	college_3P +	college_3PA +	college_3P. +	college_FT +	college_FTA +	
+                             college_DRB +	college_TRB +	college_AST +	college_STL +	college_BLK +	college_TOV,
+                  method = "anova", data = df_train)
+```
+
+Plot the VORP Decision Tree Regressor Model
+
+```{r}
+# Plot
+plot(fit_vorp, uniform = TRUE,
+     main = "NBA VORP Decision Tree Regression")
+text(fit_vorp, use.n = TRUE, cex = .7)
+
+```
+
+Predict using the generated VORP Decision Tree Regressor Model
+
+```{r}
+#Make predictions on the test dataset
+prediction <- predict(fit_vorp, df_test, method = "anova")
+
+results_df <- data.frame(df_test$nba_VORP, prediction)
+#results_df
+
+results_df$difference <- round(results_df$df_test.nba_VORP - results_df$prediction,2)
+
+MAE = mean(abs(results_df$difference))
+print(paste("Mean Absolute Error (MAE) is: ", round(MAE, 3)))
+
+SSE = sum(results_df$difference**2)
+print(paste("Sum of Squared Errors (SSE) is:", round(SSE, 3)))
+```
+# Linear Regression Models
+
+Read the combined NBA and College dataset.
+
+```{r}
+#read the cleaned and merged dataset
+nba_college_data <- read.csv("Dataset/nba_college_combined_dataset.csv", header = TRUE, sep = ",")
+
+#head(nba_college_data)
+```
+
+Initialize attributes with null values to the mean column value
+
+```{r}
+#impute null column items with the mean value for the column
+nba_college_data$college_FG.[is.na(nba_college_data$college_FG.)] <- mean(nba_college_data$college_FG., na.rm = TRUE)
+nba_college_data$college_2P.[is.na(nba_college_data$college_2P.)] <- mean(nba_college_data$college_2P., na.rm = TRUE)
+nba_college_data$college_3P.[is.na(nba_college_data$college_3P.)] <- mean(nba_college_data$college_3P., na.rm = TRUE)
+nba_college_data$college_FT.[is.na(nba_college_data$college_FT.)] <- mean(nba_college_data$college_FT., na.rm = TRUE)
+
+#check for null values in columns
+sapply(nba_college_data, function(x) sum(is.na(x)))
+```
+
+Check correlation between college predictors and response variables nba_WS, nba_WS.48 and nba_VORP
+
+```{r}
+#check correleation between college predictors and response variables nba_WS, nba_WS.48 and nba_VORP
+#ggpairs(nba_college_data, columns = c("college_G","college_GS","college_MP","college_2P","college_2PA","college_2P.",
+#                                      "college_3P","college_3PA","college_3P.","college_FT", "college_FTA","college_FT.",
+#                                      "college_FG", "college_FGA","college_FG.","college_ORB","college_DRB","college_TRB", 
+#                                      "college_STL","college_AST", "college_BLK", "college_TOV", "college_PF","college_PTS",
+#                                      "nba_WS", "nba_WS.48", "nba_VORP"), 
+#        columnLabels = c("G", "GS", "Minutes Played", "2-Pt", "2-Pt At", "2-Pt%", "3-Pt", "3-Pt At", "3-Pt%", "FT", "FT At",
+#                         "FT%", "FG", "FG At", "FG%", "ORB", "DRB", "TRB", "STL", "AST", "BLK", "TOV", "PF", "PTS", "WS", "WS.48", "VORP"),
+#        mapping=ggplot2::aes(color= "cyan"))
+
+#cor(nba_college_data[, c("college_G","college_GS","college_MP","college_2P","college_2PA","college_2P.", "college_3P","college_3PA","college_3P.","college_FT", "college_FTA","college_FT.", "college_FG", "college_FGA","college_FG.","college_ORB","college_DRB","college_TRB", "college_STL","college_AST", "college_BLK", "college_TOV", "college_PF","college_PTS","nba_WS", "nba_WS.48", "nba_VORP")], method="pearson")
+```
+
+
+Create a subset of data to train the regression models with all college predictors
+
+```{r}
+m <- dim(nba_college_data)[1]
+
+sample_size <- sample(m, size = 0.75*m)
+
+# create a subset of data to run stepwise regression for variable selection
+player_subset_1 <- as.data.frame(nba_college_data[sample_size,]) 
+
+# create a subset of data to re-run linear regression with selected variables
+player_subset_2 <- as.data.frame(nba_college_data[-sample_size,]) 
+
+```
+
+Fit a model for each of the response variables, WinShare(nba_WS) and VORP(nba_VORP), using all college predictors except the factors (college_player" & "college_team"). 
+Run bidirectional stepwise regression (forward and backward) to find the best models for WS and VORP (model with the least AIC score)
+
+```{r}
+#generate linear regression model with WinShare as the response variable and college data predictors
+model_WS <- lm(nba_WS~college_G+college_GS+college_MP+college_FG+
+                      college_FGA+college_2P+college_2PA+college_3P+college_3PA+
+                      college_FT+college_FTA+college_ORB+college_DRB+college_TRB+
+                      college_AST+college_STL+college_BLK+college_TOV+college_PF+
+                      college_PTS+college_2P.+college_3P.+college_FT.+college_FG.,
+                data=as.data.frame(player_subset_1))
+
+summary(model_WS)
+```
+
+Variable selection using step()
+
+```{r}
+step(model_WS, direction="both")
+```
+
+
+```{r}
+#generate linear regression model with VORP as the response variable and college data predictors
+model_VORP <- lm(nba_VORP~college_G+college_GS+college_MP+college_FG+
+                          college_FGA+college_2P+college_2PA+college_3P+college_3PA+
+                          college_FT+college_FTA+college_ORB+college_DRB+college_TRB+
+                          college_AST+college_STL+college_BLK+college_TOV+college_PF+
+                          college_PTS+college_2P.+college_3P.+college_FT.+college_FG.,
+                  data=as.data.frame(player_subset_1))
+
+summary(model_VORP)
+```
+
+Variable selection using step()
+
+```{r}
+step(model_VORP, direction="both")
+```
+
+Split the dataset into training(75%) and test(25%) sets
+
+```{r}
+m <- dim(nba_college_data)[1]
+
+sample_size <- sample(m, size = 0.75*m)
+
+train_data <- as.data.frame(nba_college_data[sample_size,]) # create a 75% training dataset
+test_data <-as.data.frame(nba_college_data[-sample_size,])  # create a 25% test dataset
+```
+
+### Train the WinShares Linear Regression Model with selected college predictors
+
+```{r}
+newmodel_WS <- lm(formula = nba_WS ~ college_G + college_FGA + college_2PA + college_3P + college_3PA + 
+                                     college_DRB + college_TRB + college_AST + college_STL + college_BLK + 
+                                     college_TOV + college_PTS, 
+                  data = as.data.frame(train_data))
+
+summary(newmodel_WS)
+```
+
+Plot the WinShare graphs
+
+```{r}
+# Split the plotting panel into a 2 x 2 grid
+par(mfrow = c(2, 2))  
+
+# plot the four diagnostics plots for WinShare
+plot(newmodel_WS)  
+```
+
+WinShare linear regression model deviations
+
+```{r}
+#prediction
+#WS_test_data <- test_data[, c("college_G", "college_FGA",  "college_2PA", "college_3P", "college_3PA",  "college_DRB", "college_TRB", "college_AST", "college_STL", "college_BLK", "college_TOV", "college_PTS")]
+
+#prediction_WS <- predict(newmodel_WS, WS_test_data, type="response")
+#prediction_WS
+
+WinShare_SSE <- sum((fitted(newmodel_WS) - train_data$nba_WS)^2)
+print(paste("WinShare model: Sum of the Squared Error (SSE) is: ", round(WinShare_SSE,2)))
+
+WinShare_SSR <- sum((fitted(newmodel_WS) - mean(train_data$nba_WS))^2)
+print(paste("WinShare model: Sum of the Squares Regression (SSR) is: ", round(WinShare_SSR,2)))
+```
+
+### Train the VORP Linear Regression Model with selected college predictors
+
+```{r}
+newmodel_VORP <- lm(formula = nba_VORP ~ college_MP + college_FG + college_FGA + college_2PA + 
+                                         college_3PA + college_FT + college_FTA + college_DRB + 
+                                         college_AST + college_STL + college_BLK + college_TOV + college_3P., 
+                    data = as.data.frame(train_data))
+
+summary(newmodel_VORP)
+```
+
+Plot the VORP graphs
+
+```{r}
+# Split the plotting panel into a 2 x 2 grid
+par(mfrow = c(2, 2))  
+
+# plot the four diagnostics plots for VORP
+plot(newmodel_VORP)
+```
+
+VORP linear regression model deviations
+
+```{r}
+#prediction
+#VORP_test_data <- test_data[, c("college_MP", "college_FG", "college_FGA",  "college_2PA", "college_3PA",  "college_FT", "college_FTA", "college_DRB", "college_AST", "college_STL", "college_BLK", "college_TOV", "college_3P.")]
+
+#prediction_VORP <- predict(newmodel_VORP, VORP_test_data, type="response")
+#prediction_VORP
+
+VORP_SSE <- sum((fitted(newmodel_VORP) - train_data$nba_VORP)^2)
+print(paste("VORP model: Sum of the Squared Error (SSE) is: ", round(VORP_SSE,2)))
+
+VORP_SSR <- sum((fitted(newmodel_VORP) - mean(train_data$nba_VORP))^2)
+print(paste("VORP model: Sum of the Squares Regression (SSR) is: ", round(VORP_SSR,2)))
+```
